@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/urfave/cli/v2" // imports as package "cli"
 	"log"
 	"os"
@@ -32,13 +33,17 @@ func main() {
 
 func prepareAction() (err error){
 
-	if !strings.HasPrefix(url,"http://") || !strings.HasPrefix(url,"https://") {
+	if !strings.HasPrefix(url,"http://") && !strings.HasPrefix(url,"https://") {
 		url  = "http://" + url
 	}
 	d := &Download{
 		url:url,
 	}
-	d.downloadFull()
+	err = d.GetRangeInfo()
+	if err != nil {
+		return err
+	}
+	fmt.Println(d)
 
 
 	return nil

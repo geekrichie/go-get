@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 )
 
@@ -26,4 +28,9 @@ func (f *File)Save(data []byte) error{
 		return err
 	}
 	 return nil
+}
+
+func PrintMap(data interface{}) {
+	jsonSerilize, _:= json.Marshal(data)
+	fmt.Println(string(jsonSerilize))
 }
