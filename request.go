@@ -1,38 +1,21 @@
 package main
 
 import (
-	"fmt"
+	"go-get/mimetype"
 	"io/ioutil"
 	"mime"
 	"net/http"
 	"strings"
 )
 
-var client = &http.Client{
-	Transport: &http.Transport{
-		MaxIdleConns: 20,
-		IdleConnTimeout: 1000,
-	},
-}
 
-func NewRequest(url string) ([]byte,error){
-	req, err := http.NewRequest("GET", url, nil)
+func NewRequest(method string,url string) (*http.Request,error){
+	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		return nil,err
+		return req,err
 	}
-	resp, err := client.Do(req)
-	if err != nil{
-		return nil,err
-	}
-	defer resp.Body.Close()
-	if err != nil {
-		return nil,err
-	}
-	content, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil,err
-	}
-	return content,nil
+	req.Header.Set("User-Agent","go-get/1.0")
+	return req, err
 }
 
 func NewRequestWithResponse(url string) (*http.Response,[]byte, error ){
@@ -69,12 +52,12 @@ func GetFileNameFromResponce(resp *http.Response) string{
 	if i == len(url)-1 {
 		content = resp.Header.Get("Content-Type")
 		mediaType,_, _ := mime.ParseMediaType(content)
-		if mediaType == "text/html" {
-			filename = "index.html"
+		typeMap := mimetype.GetMimeTypeMap()
+		if _,ok := typeMap[mediaType] ; ok {
+			filename = "index." + typeMap[mediaType]
 		}
 	}else {
 		filename = url[i+1:]
 	}
-	fmt.Println(filename)
 	return filename
 }

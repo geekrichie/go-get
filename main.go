@@ -3,7 +3,6 @@ package main
 import (
 	"github.com/urfave/cli/v2" // imports as package "cli"
 	"log"
-	"net/http"
 	"os"
 	"strings"
 )
@@ -16,13 +15,13 @@ func main() {
 			&cli.StringFlag{
 				Name:    "url",
 				Usage:   "a web url",
-				Value: "http://localhost",
+				Value: "localhost",
 				Aliases: []string{"b"},
 				Destination: &url,
 			},
 		},
 		Action: func(context *cli.Context) error {
-			return DownloadSingle()
+			return prepareAction()
 		},
 	}
 	err := app.Run(os.Args)
@@ -31,26 +30,16 @@ func main() {
 	}
 }
 
-func DownloadSingle() (err error){
-	var data []byte
-	var resp *http.Response
+func prepareAction() (err error){
 
 	if !strings.HasPrefix(url,"http://") || !strings.HasPrefix(url,"https://") {
 		url  = "http://" + url
 	}
+	d := &Download{
+		url:url,
+	}
+	d.downloadFull()
 
-	resp,data, err = NewRequestWithResponse(url)
-	if err != nil {
-		return err
-	}
-	f := &File{
-		Name: GetFileNameFromResponce(resp),
-		Size: len(data),
-	}
-	err = f.Save(data)
-	if err != nil{
-		log.Println(err)
-		return err
-	}
+
 	return nil
 }

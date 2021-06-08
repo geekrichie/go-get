@@ -3,9 +3,9 @@ package main
 import (
 	"errors"
 	"os"
-	"runtime"
-	"strings"
 )
+
+var  errLengthInvalid = errors.New("写入长度错误")
 
 type File struct {
 	Name string
@@ -21,26 +21,9 @@ func (f *File)Save(data []byte) error{
 	 }
 	n, err := fl.Write(data)
 	if n != len(data) {
-		return errors.New("")
+		return errLengthInvalid
 	}else if err != nil {
 		return err
 	}
 	 return nil
-}
-
-
-func callerFileLine() (file string, line int) {
-	_, file, line, ok := runtime.Caller(2)
-	if ok {
-		// Truncate file name at last file name separator.
-		if index := strings.LastIndex(file, "/"); index >= 0 {
-			file = file[index+1:]
-		} else if index = strings.LastIndex(file, "\\"); index >= 0 {
-			file = file[index+1:]
-		}
-	} else {
-		file = "???"
-		line = 1
-	}
-	return
 }
