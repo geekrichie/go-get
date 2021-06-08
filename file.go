@@ -30,6 +30,22 @@ func (f *File)Save(data []byte) error{
 	 return nil
 }
 
+func (f *File)SaveChunk(off int64,data []byte) error{
+	fl,err := os.OpenFile(f.Name,os.O_CREATE|os.O_RDWR,0666)
+	defer fl.Close()
+	if err != nil {
+		return err
+	}
+	n, err := fl.WriteAt(data, off)
+	if n != len(data) {
+		return errLengthInvalid
+	}else if err != nil {
+		return err
+	}
+	return nil
+}
+
+
 func PrintMap(data interface{}) {
 	jsonSerilize, _:= json.Marshal(data)
 	fmt.Println(string(jsonSerilize))

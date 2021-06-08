@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/urfave/cli/v2" // imports as package "cli"
 	"log"
 	"os"
@@ -43,7 +42,9 @@ func prepareAction() (err error){
 	if err != nil {
 		return err
 	}
-	fmt.Println(d)
+	if d.rangeable {
+		d.DownloadMulti()
+	}
 
 
 	return nil
