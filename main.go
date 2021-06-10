@@ -8,6 +8,7 @@ import (
 )
 
 var url string
+var dir string
 
 func main() {
 	app := &cli.App{
@@ -18,6 +19,13 @@ func main() {
 				Value: "localhost",
 				Aliases: []string{"b"},
 				Destination: &url,
+			},
+			&cli.StringFlag{
+				Name:    "dir",
+				Usage:   "file saved folder name",
+				Value: ".",
+				Aliases: []string{"d"},
+				Destination: &dir,
 			},
 		},
 		Action: func(context *cli.Context) error {
@@ -38,12 +46,18 @@ func prepareAction() (err error){
 	d := &Download{
 		url:url,
 	}
+	if dir != "" {
+		d.dir = dir
+	}
 	err = d.GetRangeInfo()
 	if err != nil {
 		return err
 	}
-	if d.rangeable {
+	//支持分段下载以及大小超过1M才分段下载
+	if d.rangeable && d.size > MIN_CHUNK_SIZE{
 		d.DownloadMulti()
+	}else {
+		d.DownloadFull()
 	}
 
 

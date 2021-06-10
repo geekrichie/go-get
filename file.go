@@ -12,6 +12,7 @@ var  errLengthInvalid = errors.New("写入长度错误")
 type File struct {
 	Name string
 	Size int
+	Path string
 }
 
 
@@ -30,13 +31,13 @@ func (f *File)Save(data []byte) error{
 	 return nil
 }
 
-func (f *File)SaveChunk(off int64,data []byte) error{
+func (f *File)SaveChunk(data []byte) error{
 	fl,err := os.OpenFile(f.Name,os.O_CREATE|os.O_RDWR,0666)
 	defer fl.Close()
 	if err != nil {
 		return err
 	}
-	n, err := fl.WriteAt(data, off)
+	n, err := fl.Write(data)
 	if n != len(data) {
 		return errLengthInvalid
 	}else if err != nil {

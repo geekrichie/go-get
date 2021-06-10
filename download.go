@@ -16,8 +16,19 @@ var errDataIncomplete = errors.New("data is not complete")
 
 type Download struct {
 	url string
-	rangeable bool
-	size int //下载文件的大小
+	rangeable bool //是否可以分块下载
+	size int       //下载文件的大小
+	chunkSize int  //分块下载文件的大小
+	chunkNum   int //分块下载文件的数量
+	finished   int //下载完成的分区数量
+	retry      int //重试次数
+	dir        string //文件下载目录
+	filename   string //文件名称
+}
+
+type Chunk struct {
+	close chan struct{} //是否已经完成
+	size int            //当前chunk的大小
 }
 
 var client = &http.Client{
@@ -27,7 +38,17 @@ var client = &http.Client{
 	},
 }
 
-func (d *Download)downloadFull() error{
+//设置chunkSize的大小
+func (d *Download)SetChunkSize(chunkSize int) {
+	d.chunkSize = chunkSize
+}
+//设置chunkSize的大小
+func (d *Download)SetChunkNum(chunkNum int) {
+	d.chunkNum = chunkNum
+}
+
+//下载整个文件
+func (d *Download)DownloadFull() error{
 	req, err := NewRequest("GET", d.url)
 	if err != nil {
 		return err
@@ -53,6 +74,7 @@ func (d *Download)downloadFull() error{
 	return err
 }
 
+//下载某个chunk
 func (d *Download)DownloadTrunk(start, end int) error{
 	req, err := NewRequest("GET", d.url)
 	if err != nil {
@@ -76,12 +98,17 @@ func (d *Download)DownloadTrunk(start, end int) error{
 		return errNotValidType
 	}
 	f := &File{
-		Name: filename,
+		Name: fmt.Sprintf("%s_%d", filename, start),
 		Size: len(data),
+		//Path: fmt.Sprintf("%s%s_%d", d.dir,filename,string(os.PathSeparator), start),
 	}
-	err = f.SaveChunk(int64(start),data)
+	err = f.SaveChunk(data)
 	return err
 }
+
+//func (d *Download) combineFilePath() string{
+//	return fmt.Sprintf("%s%s_%d",d.dir)
+//}
 
 func (d *Download) GetRangeInfo() error{
 	req, err := NewRequest("GET", d.url)
@@ -112,11 +139,12 @@ func (d *Download) GetRangeInfo() error{
 }
 
 var (
-	MIN_CHUNK_SIZE  = 4
+	MIN_CHUNK_SIZE  = 5*1024*1024
 	MAX_CHUNK_SIZE  = 20*1024*1024
 )
 
 
+//计算下载的文件块大小
 func (d *Download)GetChunkSize() int{
 	if d.size == 0 {
 		return 0
@@ -124,9 +152,6 @@ func (d *Download)GetChunkSize() int{
 	var chunkSize = d.size/runtime.NumCPU()
 	for chunkSize > MAX_CHUNK_SIZE {
 		chunkSize = chunkSize / 2
-	}
-	if chunkSize < MIN_CHUNK_SIZE {
-		chunkSize = MIN_CHUNK_SIZE
 	}
 	return chunkSize
 }
@@ -139,6 +164,7 @@ func (d *Download)DownloadMulti() {
 		wg sync.WaitGroup
 	)
 	chunkSize = d.GetChunkSize()
+	d.SetChunkSize(chunkSize)
 	if d.size <=0 {
 		return
 	}
@@ -146,6 +172,7 @@ func (d *Download)DownloadMulti() {
 	if d.size %chunkSize != 0 {
 		n = n+1
 	}
+	d.SetChunkNum(n)
 
 	for i:=0;i < n;i++ {
 		wg.Add(1)
