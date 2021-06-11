@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 var errNotValidType = errors.New("not valid file type")
@@ -19,17 +24,14 @@ type Download struct {
 	rangeable bool //是否可以分块下载
 	size int       //下载文件的大小
 	chunkSize int  //分块下载文件的大小
-	chunkNum   int //分块下载文件的数量
-	finished   int //下载完成的分区数量
+	chunkNum   int32 //分块下载文件的数量
+	finished   int32 //下载完成的分区数量
 	retry      int //重试次数
 	dir        string //文件下载目录
 	filename   string //文件名称
+	done       chan struct{}
 }
 
-type Chunk struct {
-	close chan struct{} //是否已经完成
-	size int            //当前chunk的大小
-}
 
 var client = &http.Client{
 	Transport: &http.Transport{
@@ -44,7 +46,7 @@ func (d *Download)SetChunkSize(chunkSize int) {
 }
 //设置chunkSize的大小
 func (d *Download)SetChunkNum(chunkNum int) {
-	d.chunkNum = chunkNum
+	d.chunkNum = int32(chunkNum)
 }
 
 //下载整个文件
@@ -98,17 +100,78 @@ func (d *Download)DownloadTrunk(start, end int) error{
 		return errNotValidType
 	}
 	f := &File{
-		Name: fmt.Sprintf("%s_%d", filename, start),
+		Name: d.chunkName(start/d.chunkSize),
 		Size: len(data),
-		//Path: fmt.Sprintf("%s%s_%d", d.dir,filename,string(os.PathSeparator), start),
+		Path: d.combineFilePath(),
 	}
 	err = f.SaveChunk(data)
+	if err == nil {
+		//保存文件成功
+         atomic.AddInt32(&d.finished, 1)
+         if d.chunkNum == d.finished {
+         	d.Close()
+		 }
+	}
 	return err
 }
 
-//func (d *Download) combineFilePath() string{
-//	return fmt.Sprintf("%s%s_%d",d.dir)
-//}
+var once sync.Once
+
+func (d *Download) Close() {
+	once.Do(func() {
+		close(d.done)
+	})
+}
+
+func (d *Download)chunkName(block int) string{
+	return fmt.Sprintf("chunk_%d", block)
+}
+
+func (d *Download)clean() {
+	path := d.combineFilePath()
+	files,err := ioutil.ReadDir(path)
+	CheckError(err)
+	for _, file := range files {
+		if strings.HasPrefix(file.Name(), "chunk_"){
+			 os.Remove(path+string(os.PathSeparator)+file.Name())
+		}
+	}
+}
+
+func (d *Download)Merge() {
+	ctx, cancel  := context.WithTimeout(context.Background(),time.Duration(10)*time.Minute)
+	defer cancel()
+	defer d.clean()
+	select {
+	    case <-ctx.Done():
+	    	log.Println(d.filename,"下载已超时")
+	    	log.Fatal("下载超时")
+		case <-d.done:
+			log.Println("准备合并操作")
+	}
+	path := d.combineFilePath()
+	mergeFile,err := os.OpenFile(path+ string(os.PathSeparator) + d.filename, os.O_CREATE|os.O_WRONLY, 0664)
+	CheckError(err)
+	defer  mergeFile.Close()
+	for  i  := int32(0); i< d.chunkNum; i++ {
+		content, err := ioutil.ReadFile(path+ string(os.PathSeparator) + d.chunkName(int(i)))
+		CheckError(err)
+		n, err := mergeFile.Write(content)
+		if n != len(content) {
+			CheckError(errDataIncomplete)
+		}
+		CheckError(err)
+	}
+	log.Println("合并文件完成")
+}
+
+func (d *Download) combineFilePath() string{
+	suffixPoint := strings.LastIndex(d.filename, ".")
+	return fmt.Sprintf("%s%s%s",
+		d.dir,
+		string(os.PathSeparator),
+		d.filename[:suffixPoint], )
+}
 
 func (d *Download) GetRangeInfo() error{
 	req, err := NewRequest("GET", d.url)
@@ -135,6 +198,7 @@ func (d *Download) GetRangeInfo() error{
 			d.size, err = strconv.Atoi(size)
 		}
 	}
+	d.filename = GetFileNameFromResponce(resp)
 	return nil
 }
 
@@ -173,6 +237,11 @@ func (d *Download)DownloadMulti() {
 		n = n+1
 	}
 	d.SetChunkNum(n)
+	wg.Add(1)
+	go func() {
+		d.Merge()
+		wg.Done()
+	}()
 
 	for i:=0;i < n;i++ {
 		wg.Add(1)

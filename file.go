@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 )
 
@@ -32,7 +33,11 @@ func (f *File)Save(data []byte) error{
 }
 
 func (f *File)SaveChunk(data []byte) error{
-	fl,err := os.OpenFile(f.Name,os.O_CREATE|os.O_RDWR,0666)
+	if !Exists(f.Path) {
+		err := os.MkdirAll(f.Path, 0664)
+		CheckError(err)
+	}
+	fl,err := os.OpenFile(f.Path+string(os.PathSeparator)+f.Name,os.O_CREATE|os.O_RDWR,0666)
 	defer fl.Close()
 	if err != nil {
 		return err
@@ -44,6 +49,23 @@ func (f *File)SaveChunk(data []byte) error{
 		return err
 	}
 	return nil
+}
+
+func Exists(path string) bool {
+	_, err := os.Stat(path)    //os.Stat获取文件信息
+	if err != nil {
+		if os.IsExist(err) {
+			return true
+		}
+		return false
+	}
+	return true
+}
+
+func CheckError(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 

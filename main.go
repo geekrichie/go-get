@@ -23,7 +23,7 @@ func main() {
 			&cli.StringFlag{
 				Name:    "dir",
 				Usage:   "file saved folder name",
-				Value: ".",
+				Value:    ".",
 				Aliases: []string{"d"},
 				Destination: &dir,
 			},
@@ -45,6 +45,7 @@ func prepareAction() (err error){
 	}
 	d := &Download{
 		url:url,
+		done : make(chan struct{},1),
 	}
 	if dir != "" {
 		d.dir = dir

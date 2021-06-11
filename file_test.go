@@ -27,7 +27,6 @@ func TestGet(t *testing.T) {
 			},
 		}
 		req, err := http.NewRequest(method, url, nil)
-		req.Header.Set("")
 
 		if err != nil {
 			fmt.Println(err)
