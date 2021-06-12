@@ -95,10 +95,6 @@ func (d *Download)DownloadTrunk(start, end int) error{
 	if len(data) != end-start+1 {
 		return errDataIncomplete
 	}
-	filename := GetFileNameFromResponce(resp)
-	if filename == "" {
-		return errNotValidType
-	}
 	f := &File{
 		Name: d.chunkName(start/d.chunkSize),
 		Size: len(data),
@@ -127,6 +123,9 @@ func (d *Download)chunkName(block int) string{
 	return fmt.Sprintf("chunk_%d", block)
 }
 
+/**
+合并后删除分区文件
+ */
 func (d *Download)clean() {
 	path := d.combineFilePath()
 	files,err := ioutil.ReadDir(path)
@@ -137,6 +136,10 @@ func (d *Download)clean() {
 		}
 	}
 }
+/**
+阻塞等待下载任务完成
+合并文件
+ */
 
 func (d *Download)Merge() {
 	ctx, cancel  := context.WithTimeout(context.Background(),time.Duration(10)*time.Minute)
@@ -170,7 +173,7 @@ func (d *Download) combineFilePath() string{
 	return fmt.Sprintf("%s%s%s",
 		d.dir,
 		string(os.PathSeparator),
-		d.filename[:suffixPoint], )
+		d.filename[:suffixPoint] )
 }
 
 func (d *Download) GetRangeInfo() error{
@@ -226,6 +229,7 @@ func (d *Download)DownloadMulti() {
 		chunkSize int
 		n int
 		wg sync.WaitGroup
+		downloadFilePath string
 	)
 	chunkSize = d.GetChunkSize()
 	d.SetChunkSize(chunkSize)
@@ -242,8 +246,13 @@ func (d *Download)DownloadMulti() {
 		d.Merge()
 		wg.Done()
 	}()
+	downloadFilePath = d.combineFilePath()
 
 	for i:=0;i < n;i++ {
+		//之前存在的文件就不重新下载了
+		if !Exists(downloadFilePath + string(os.PathSeparator) + d.chunkName(i)) {
+              continue
+		}
 		wg.Add(1)
           if i!= n-1 {
           	go func(i int) {

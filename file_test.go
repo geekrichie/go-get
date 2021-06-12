@@ -48,3 +48,7 @@ func TestGet(t *testing.T) {
 		fmt.Println(string(body))
 
 }
+
+func TestExists(t *testing.T) {
+
+}

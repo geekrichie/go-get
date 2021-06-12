@@ -62,6 +62,18 @@ func Exists(path string) bool {
 	return true
 }
 
+func IsDir(path string) bool {
+	s, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return s.IsDir()
+}
+
+func IsFile(path string) bool {
+	return !IsDir(path)
+}
+
 func CheckError(err error) {
 	if err != nil {
 		log.Fatal(err)
