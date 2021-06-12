@@ -3,7 +3,9 @@ package main
 import (
 	"github.com/urfave/cli/v2" // imports as package "cli"
 	"log"
+	_ "net/http/pprof"
 	"os"
+	"runtime/pprof"
 	"strings"
 )
 
@@ -11,6 +13,27 @@ var url string
 var dir string
 
 func main() {
+	var f *os.File
+	var err error
+
+		f, err = os.Create("cpu1.profile")
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		defer f.Close() // error handling omitted for example
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+
+	// ... rest of the program ...
+
+		f, err = os.Create("mem1.profile")
+		if err != nil {
+			log.Fatal("could not create memory profile: ", err)
+		}
+		defer f.Close() // error handling omitted for example
+
 	app := &cli.App{
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -32,9 +55,12 @@ func main() {
 			return prepareAction()
 		},
 	}
-	err := app.Run(os.Args)
+	err = app.Run(os.Args)
 	if err != nil {
 		log.Fatal(err)
+	}
+	if err := pprof.WriteHeapProfile(f); err != nil {
+		log.Fatal("could not write memory profile: ", err)
 	}
 }
 

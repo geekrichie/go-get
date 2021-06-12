@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"go-get/progressBar"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -39,7 +41,7 @@ type Download struct {
 var client = &http.Client{
 	Transport: &http.Transport{
 		MaxIdleConns: 20,
-		IdleConnTimeout: 1000,
+		IdleConnTimeout: 10000,
 	},
 }
 
@@ -91,19 +93,13 @@ func (d *Download)DownloadTrunk(start, end int) error{
 		return err
 	}
 	defer resp.Body.Close()
-	data, err :=ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if len(data) != end-start+1 {
-		return errDataIncomplete
-	}
+	clen, _ := strconv.Atoi(resp.Header.Get("Content-Length"))
 	f := &File{
 		Name: d.chunkName(start/d.chunkSize),
-		Size: len(data),
+		Size: clen,
 		Path: d.combineFilePath(),
 	}
-	err = f.SaveChunk(data)
+	err = f.SaveChunk(resp.Body)
 	if err == nil {
 		//保存文件成功
          atomic.AddInt32(&d.finished, 1)
@@ -139,7 +135,7 @@ func (d *Download)clean() {
 	CheckError(err)
 	for _, file := range files {
 		if strings.HasPrefix(file.Name(), "chunk_"){
-			 os.Remove(path+string(os.PathSeparator)+file.Name())
+			err = os.Remove(path + string(os.PathSeparator) + file.Name())
 		}
 	}
 }
@@ -162,15 +158,18 @@ func (d *Download)Merge() {
 	path := d.combineFilePath()
 	mergeFile,err := os.OpenFile(path+ string(os.PathSeparator) + d.filename, os.O_CREATE|os.O_WRONLY, 0664)
 	CheckError(err)
+	writer := bufio.NewWriter(mergeFile)
 	defer  mergeFile.Close()
 	for  i  := int32(0); i< d.chunkNum; i++ {
-		content, err := ioutil.ReadFile(path+ string(os.PathSeparator) + d.chunkName(int(i)))
+		fd , err:= os.Open(path+ string(os.PathSeparator) + d.chunkName(int(i)))
 		CheckError(err)
-		n, err := mergeFile.Write(content)
-		if n != len(content) {
-			CheckError(errDataIncomplete)
+		reader := bufio.NewReader(fd)
+		_, err = io.Copy(writer, reader)
+		if err != nil{
+			fd.Close()
 		}
 		CheckError(err)
+		fd.Close()
 	}
 	log.Println("合并文件完成")
 }
@@ -255,7 +254,6 @@ func (d *Download)DownloadMulti() {
 	}()
 	downloadFilePath = d.combineFilePath()
 
-	//
 	finished := 0
 	for i:=0;i < n;i++ {
 		//之前存在的文件就不重新下载了
@@ -264,9 +262,11 @@ func (d *Download)DownloadMulti() {
 		}
 	}
 	d.finished = int32(finished)
+	if d.chunkNum == d.finished {
+		d.Close()
+	}
 	bar := progressBar.New(finished, n)
 	d.bar = bar
-
 	for i:=0;i < n;i++ {
 		//之前存在的文件就不重新下载了
 		if Exists(downloadFilePath + string(os.PathSeparator) + d.chunkName(i)) {

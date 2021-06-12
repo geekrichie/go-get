@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 )
@@ -32,7 +33,7 @@ func (f *File)Save(data []byte) error{
 	 return nil
 }
 
-func (f *File)SaveChunk(data []byte) error{
+func (f *File)SaveChunk(r io.Reader) error{
 	if !Exists(f.Path) {
 		err := os.MkdirAll(f.Path, 0664)
 		CheckError(err)
@@ -42,10 +43,8 @@ func (f *File)SaveChunk(data []byte) error{
 	if err != nil {
 		return err
 	}
-	n, err := fl.Write(data)
-	if n != len(data) {
-		return errLengthInvalid
-	}else if err != nil {
+	_, err = io.Copy(fl, r)
+	if err != nil{
 		return err
 	}
 	return nil
