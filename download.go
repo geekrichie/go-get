@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go-get/progressBar"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -30,6 +31,8 @@ type Download struct {
 	dir        string //文件下载目录
 	filename   string //文件名称
 	done       chan struct{}
+	bar        *progressBar.ProgressBar
+	mutex      sync.Mutex
 }
 
 
@@ -104,6 +107,9 @@ func (d *Download)DownloadTrunk(start, end int) error{
 	if err == nil {
 		//保存文件成功
          atomic.AddInt32(&d.finished, 1)
+         d.mutex.Lock()
+         d.bar.Draw(int(d.finished))
+         d.mutex.Unlock()
          if d.chunkNum == d.finished {
          	d.Close()
 		 }
@@ -115,6 +121,7 @@ var once sync.Once
 
 func (d *Download) Close() {
 	once.Do(func() {
+		d.bar.Finish()
 		close(d.done)
 	})
 }
@@ -248,9 +255,21 @@ func (d *Download)DownloadMulti() {
 	}()
 	downloadFilePath = d.combineFilePath()
 
+	//
+	finished := 0
 	for i:=0;i < n;i++ {
 		//之前存在的文件就不重新下载了
-		if !Exists(downloadFilePath + string(os.PathSeparator) + d.chunkName(i)) {
+		if Exists(downloadFilePath + string(os.PathSeparator) + d.chunkName(i)) {
+			finished = finished + 1
+		}
+	}
+	d.finished = int32(finished)
+	bar := progressBar.New(finished, n)
+	d.bar = bar
+
+	for i:=0;i < n;i++ {
+		//之前存在的文件就不重新下载了
+		if Exists(downloadFilePath + string(os.PathSeparator) + d.chunkName(i)) {
               continue
 		}
 		wg.Add(1)
